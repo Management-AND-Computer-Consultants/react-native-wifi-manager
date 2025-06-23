@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.7] - 2024-01-XX
+
+### Fixed
+- **Backward Compatibility**: Restored minSdkVersion 21 support for older Android versions
+- **Permission Handling**: Made Android 13+ permissions optional for backward compatibility
+- **Flexible Permissions**: Updated permission checking to work with both old and new Android versions
+
+### Technical Improvements
+- Added maxSdkVersion attributes to newer permissions to prevent conflicts
+- Updated permission logic to use OR condition instead of AND for Android 13+
+- Maintained target SDK 35 while supporting min SDK 21
+- Enhanced compatibility with apps that cannot upgrade their minSdkVersion
+
 ## [1.0.6] - 2024-01-XX
 
 ### Fixed

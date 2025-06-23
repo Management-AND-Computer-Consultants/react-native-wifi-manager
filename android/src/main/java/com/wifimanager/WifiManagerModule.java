@@ -282,7 +282,8 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 boolean hasNearbyWifiPermission = ActivityCompat.checkSelfPermission(reactContext,
                         Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED;
-                return hasLocationPermission && hasNearbyWifiPermission;
+                // For backward compatibility, only require location permission if NEARBY_WIFI_DEVICES is not available
+                return hasLocationPermission || hasNearbyWifiPermission;
             }
             
             return hasLocationPermission;
