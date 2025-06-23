@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.4] - 2024-12-19
+
+### Fixed
+- Simplified Promise implementation in `scanWifiNetworksWithPermissionRequest` method
+- Removed complex Promise interface implementation that was causing compilation errors
+- Fixed compilation error by using direct permission request approach
+
+## [1.1.3] - 2024-12-19
+
+### Fixed
+- Added missing `reject(String,WritableMap)` method to Promise interface implementation
+- Fixed compilation error due to incomplete Promise interface implementation
+
 ## [1.1.2] - 2024-12-19
 
 ### Fixed

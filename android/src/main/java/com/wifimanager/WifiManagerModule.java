@@ -443,55 +443,59 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
         if (!checkPermissions()) {
             Log.d(TAG, "Permissions not granted, requesting permissions...");
             
-            // Request permissions first
-            requestPermissions(new Promise() {
-                @Override
-                public void resolve(Object value) {
-                    // After requesting permissions, try scanning again
-                    Log.d(TAG, "Permission request completed, attempting scan...");
+            try {
+                // Request permissions directly
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    List<String> permissionsToRequest = new ArrayList<>();
                     
-                    // Give a small delay for permission dialog to complete
-                    new Handler().postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            // Check permissions again after request
-                            if (checkPermissions()) {
-                                Log.d(TAG, "Permissions granted, proceeding with scan...");
-                                // Call the original scan method
-                                scanWifiNetworks(promise);
-                            } else {
-                                Log.e(TAG, "Permissions still not granted after request");
-                                promise.reject("PERMISSION_DENIED", "Required permissions not granted after request. Please grant location permissions manually.");
-                            }
+                    if (ActivityCompat.checkSelfPermission(reactContext, 
+                            Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                    }
+                    
+                    if (ActivityCompat.checkSelfPermission(reactContext, 
+                            Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+                    }
+                    
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        if (ActivityCompat.checkSelfPermission(reactContext,
+                                Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                            permissionsToRequest.add(Manifest.permission.NEARBY_WIFI_DEVICES);
                         }
-                    }, 1000); // 1 second delay
+                    }
+                    
+                    if (!permissionsToRequest.isEmpty()) {
+                        ActivityCompat.requestPermissions(
+                            reactContext.getCurrentActivity(),
+                            permissionsToRequest.toArray(new String[0]),
+                            1001
+                        );
+                        
+                        // Give a delay for permission dialog to complete
+                        new Handler().postDelayed(new Runnable() {
+                            @Override
+                            public void run() {
+                                if (checkPermissions()) {
+                                    Log.d(TAG, "Permissions granted, proceeding with scan...");
+                                    scanWifiNetworks(promise);
+                                } else {
+                                    Log.e(TAG, "Permissions still not granted after request");
+                                    promise.reject("PERMISSION_DENIED", "Required permissions not granted after request. Please grant location permissions manually.");
+                                }
+                            }
+                        }, 1000);
+                        return;
+                    }
                 }
-
-                @Override
-                public void reject(String code) {
-                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + code);
-                }
-
-                @Override
-                public void reject(String code, String message) {
-                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
-                }
-
-                @Override
-                public void reject(String code, Throwable throwable) {
-                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + throwable.getMessage());
-                }
-
-                @Override
-                public void reject(String code, String message, Throwable throwable) {
-                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
-                }
-
-                @Override
-                public void reject(String code, String message, Throwable throwable, WritableMap userInfo) {
-                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message, throwable, userInfo);
-                }
-            });
+                
+                // If we get here, permissions are already granted
+                scanWifiNetworks(promise);
+                
+            } catch (Exception e) {
+                Log.e(TAG, "Error requesting permissions", e);
+                promise.reject("PERMISSION_REQUEST_ERROR", e.getMessage());
+            }
             return;
         }
 
