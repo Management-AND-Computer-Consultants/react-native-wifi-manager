@@ -38,6 +38,8 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
     private WifiManager wifiManager;
     private BroadcastReceiver wifiScanReceiver;
     private boolean isScanning = false;
+    private boolean isReceiverRegistered = false;
+    private Promise currentScanPromise = null;
 
     public WifiManagerModule(ReactApplicationContext reactContext) {
         super(reactContext);
@@ -66,37 +68,126 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
 
         try {
             isScanning = true;
+            currentScanPromise = promise;
+            
+            // Unregister any existing receiver first
+            unregisterScanReceiver();
             
             wifiScanReceiver = new BroadcastReceiver() {
                 @Override
                 public void onReceive(Context context, Intent intent) {
-                    boolean success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
-                    if (success) {
-                        List<ScanResult> results = wifiManager.getScanResults();
-                        WritableArray networks = convertScanResultsToArray(results);
-                        sendEvent("wifiScanResults", networks);
-                        promise.resolve(networks);
-                    } else {
-                        promise.reject("SCAN_FAILED", "WiFi scan failed");
+                    try {
+                        // Check if context and intent are valid
+                        if (context == null || intent == null) {
+                            Log.e(TAG, "Invalid context or intent in broadcast receiver");
+                            handleScanFailure("Invalid broadcast data");
+                            return;
+                        }
+
+                        // Check if the action matches
+                        if (!WifiManager.SCAN_RESULTS_AVAILABLE_ACTION.equals(intent.getAction())) {
+                            Log.w(TAG, "Received unexpected broadcast action: " + intent.getAction());
+                            return;
+                        }
+
+                        boolean success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
+                        if (success) {
+                            handleScanSuccess();
+                        } else {
+                            handleScanFailure("WiFi scan failed");
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error in broadcast receiver", e);
+                        handleScanFailure("Broadcast receiver error: " + e.getMessage());
                     }
-                    isScanning = false;
-                    reactContext.unregisterReceiver(wifiScanReceiver);
                 }
             };
 
             IntentFilter intentFilter = new IntentFilter();
             intentFilter.addAction(WifiManager.SCAN_RESULTS_AVAILABLE_ACTION);
-            reactContext.registerReceiver(wifiScanReceiver, intentFilter);
+            
+            try {
+                reactContext.registerReceiver(wifiScanReceiver, intentFilter);
+                isReceiverRegistered = true;
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to register broadcast receiver", e);
+                isScanning = false;
+                currentScanPromise = null;
+                promise.reject("RECEIVER_ERROR", "Failed to register broadcast receiver: " + e.getMessage());
+                return;
+            }
 
             boolean scanStarted = wifiManager.startScan();
             if (!scanStarted) {
-                promise.reject("SCAN_FAILED", "Failed to start WiFi scan");
+                Log.e(TAG, "Failed to start WiFi scan");
+                unregisterScanReceiver();
                 isScanning = false;
+                currentScanPromise = null;
+                promise.reject("SCAN_FAILED", "Failed to start WiFi scan");
             }
         } catch (Exception e) {
+            Log.e(TAG, "Error starting WiFi scan", e);
+            unregisterScanReceiver();
             isScanning = false;
+            currentScanPromise = null;
             promise.reject("SCAN_ERROR", e.getMessage());
         }
+    }
+
+    private void handleScanSuccess() {
+        try {
+            if (currentScanPromise == null) {
+                Log.w(TAG, "Scan promise is null, ignoring scan results");
+                return;
+            }
+
+            List<ScanResult> results = wifiManager.getScanResults();
+            if (results == null) {
+                Log.w(TAG, "Scan results are null");
+                currentScanPromise.reject("SCAN_FAILED", "No scan results available");
+            } else {
+                WritableArray networks = convertScanResultsToArray(results);
+                sendEvent("wifiScanResults", networks);
+                currentScanPromise.resolve(networks);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling scan success", e);
+            if (currentScanPromise != null) {
+                currentScanPromise.reject("SCAN_ERROR", "Error processing scan results: " + e.getMessage());
+            }
+        } finally {
+            cleanupScan();
+        }
+    }
+
+    private void handleScanFailure(String error) {
+        try {
+            if (currentScanPromise != null) {
+                currentScanPromise.reject("SCAN_FAILED", error);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error handling scan failure", e);
+        } finally {
+            cleanupScan();
+        }
+    }
+
+    private void cleanupScan() {
+        isScanning = false;
+        currentScanPromise = null;
+        unregisterScanReceiver();
+    }
+
+    private void unregisterScanReceiver() {
+        if (wifiScanReceiver != null && isReceiverRegistered) {
+            try {
+                reactContext.unregisterReceiver(wifiScanReceiver);
+                isReceiverRegistered = false;
+            } catch (Exception e) {
+                Log.e(TAG, "Error unregistering scan receiver", e);
+            }
+        }
+        wifiScanReceiver = null;
     }
 
     @ReactMethod
@@ -184,10 +275,40 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
 
     private boolean checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            return ActivityCompat.checkSelfPermission(reactContext, 
+            boolean hasLocationPermission = ActivityCompat.checkSelfPermission(reactContext, 
                     Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            
+            // For Android 13+ (API 33+), also check for NEARBY_WIFI_DEVICES permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                boolean hasNearbyWifiPermission = ActivityCompat.checkSelfPermission(reactContext,
+                        Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED;
+                return hasLocationPermission && hasNearbyWifiPermission;
+            }
+            
+            return hasLocationPermission;
         }
         return true;
+    }
+
+    private String getMissingPermissions() {
+        StringBuilder missingPermissions = new StringBuilder();
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                missingPermissions.append("ACCESS_FINE_LOCATION ");
+            }
+            
+            // For Android 13+ (API 33+), also check for NEARBY_WIFI_DEVICES permission
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (ActivityCompat.checkSelfPermission(reactContext,
+                        Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                    missingPermissions.append("NEARBY_WIFI_DEVICES ");
+                }
+            }
+        }
+        
+        return missingPermissions.toString().trim();
     }
 
     private WritableArray convertScanResultsToArray(List<ScanResult> results) {
@@ -225,12 +346,17 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
     @Override
     public void onCatalystInstanceDestroy() {
         super.onCatalystInstanceDestroy();
-        if (wifiScanReceiver != null) {
-            try {
-                reactContext.unregisterReceiver(wifiScanReceiver);
-            } catch (Exception e) {
-                Log.e(TAG, "Error unregistering receiver", e);
+        try {
+            // Clean up any ongoing scan
+            if (isScanning) {
+                Log.w(TAG, "Module destroyed while scan was in progress");
+                cleanupScan();
             }
+            
+            // Unregister receiver if still registered
+            unregisterScanReceiver();
+        } catch (Exception e) {
+            Log.e(TAG, "Error during module destruction", e);
         }
     }
 } 

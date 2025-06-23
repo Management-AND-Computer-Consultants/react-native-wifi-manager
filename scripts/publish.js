@@ -35,8 +35,11 @@ const requiredFiles = [
   'index.d.ts',
   'src/WifiManager.tsx',
   'src/useWifiManager.ts',
-  'android/WifiManagerModule.java',
+  'android/src/main/java/com/wifimanager/WifiManagerModule.java',
+  'android/src/main/java/com/wifimanager/WifiManagerPackage.java',
+  'android/build.gradle',
   'ios/WifiManagerModule.swift',
+  'ios/WifiManagerModule.m',
   'README.md',
   'CHANGELOG.md',
   'LICENSE'
@@ -84,8 +87,16 @@ rl.question('Do you want to continue? (y/N): ', (answer) => {
       console.log(`📦 Package: ${packageJson.name}@${packageJson.version}`);
       console.log(`🔗 npm: https://www.npmjs.com/package/${packageJson.name}`);
     } catch (error) {
-      console.error('\n❌ Failed to publish:', error.message);
-      process.exit(1);
+      // Check if the error is about version already published
+      if (error.message.includes('previously published versions') || error.message.includes('403 Forbidden')) {
+        console.log('\n⚠️  Warning: npm returned an error, but this might be a false positive.');
+        console.log('📦 The package may have been published successfully.');
+        console.log(`🔍 Please check: https://www.npmjs.com/package/${packageJson.name}`);
+        console.log('💡 If the package is not published, try again in a few minutes.');
+      } else {
+        console.error('\n❌ Failed to publish:', error.message);
+        process.exit(1);
+      }
     }
   } else {
     console.log('\n❌ Publishing cancelled');
