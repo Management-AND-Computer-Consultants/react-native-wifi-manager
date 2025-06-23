@@ -468,6 +468,11 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
                 }
 
                 @Override
+                public void reject(String code) {
+                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + code);
+                }
+
+                @Override
                 public void reject(String code, String message) {
                     promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
                 }
