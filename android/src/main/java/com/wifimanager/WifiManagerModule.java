@@ -13,6 +13,7 @@ import android.net.wifi.WifiConfiguration;
 import android.net.wifi.WifiInfo;
 import android.net.wifi.WifiManager;
 import android.os.Build;
+import android.os.Handler;
 import android.util.Log;
 
 import androidx.annotation.NonNull;
@@ -28,6 +29,7 @@ import com.facebook.react.bridge.WritableArray;
 import com.facebook.react.bridge.WritableMap;
 import com.facebook.react.modules.core.DeviceEventManagerModule;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class WifiManagerModule extends ReactContextBaseJavaModule {
@@ -56,12 +58,24 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
 
     @ReactMethod
     public void scanWifiNetworks(Promise promise) {
+        Log.d(TAG, "Starting WiFi scan...");
+        
+        // Check if WiFi is enabled first
+        if (!wifiManager.isWifiEnabled()) {
+            Log.e(TAG, "WiFi is not enabled");
+            promise.reject("WIFI_DISABLED", "WiFi is not enabled. Please enable WiFi first.");
+            return;
+        }
+
         if (!checkPermissions()) {
-            promise.reject("PERMISSION_DENIED", "Location permission is required for WiFi scanning");
+            String missingPermissions = getMissingPermissions();
+            Log.e(TAG, "Permission denied. Missing: " + missingPermissions);
+            promise.reject("PERMISSION_DENIED", "Required permissions not granted: " + missingPermissions);
             return;
         }
 
         if (isScanning) {
+            Log.w(TAG, "Scan already in progress");
             promise.reject("ALREADY_SCANNING", "WiFi scan is already in progress");
             return;
         }
@@ -70,6 +84,8 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
             isScanning = true;
             currentScanPromise = promise;
             
+            Log.d(TAG, "Setting up scan receiver...");
+            
             // Unregister any existing receiver first
             unregisterScanReceiver();
             
@@ -77,6 +93,8 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
                 @Override
                 public void onReceive(Context context, Intent intent) {
                     try {
+                        Log.d(TAG, "Received broadcast: " + intent.getAction());
+                        
                         // Check if context and intent are valid
                         if (context == null || intent == null) {
                             Log.e(TAG, "Invalid context or intent in broadcast receiver");
@@ -91,10 +109,12 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
                         }
 
                         boolean success = intent.getBooleanExtra(WifiManager.EXTRA_RESULTS_UPDATED, false);
+                        Log.d(TAG, "Scan success: " + success);
+                        
                         if (success) {
                             handleScanSuccess();
                         } else {
-                            handleScanFailure("WiFi scan failed");
+                            handleScanFailure("WiFi scan failed - no results updated");
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "Error in broadcast receiver", e);
@@ -109,6 +129,7 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
             try {
                 reactContext.registerReceiver(wifiScanReceiver, intentFilter);
                 isReceiverRegistered = true;
+                Log.d(TAG, "Broadcast receiver registered successfully");
             } catch (Exception e) {
                 Log.e(TAG, "Failed to register broadcast receiver", e);
                 isScanning = false;
@@ -117,20 +138,36 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
                 return;
             }
 
+            // Start the scan
+            Log.d(TAG, "Starting WiFi scan...");
             boolean scanStarted = wifiManager.startScan();
+            Log.d(TAG, "Scan started: " + scanStarted);
+            
             if (!scanStarted) {
                 Log.e(TAG, "Failed to start WiFi scan");
                 unregisterScanReceiver();
                 isScanning = false;
                 currentScanPromise = null;
-                promise.reject("SCAN_FAILED", "Failed to start WiFi scan");
+                promise.reject("SCAN_FAILED", "Failed to start WiFi scan. Please check if WiFi is enabled and try again.");
             }
+            
+            // Set a timeout to prevent hanging
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (isScanning && currentScanPromise != null) {
+                        Log.w(TAG, "Scan timeout - no results received");
+                        handleScanFailure("Scan timeout - no results received within 10 seconds");
+                    }
+                }
+            }, 10000); // 10 second timeout
+            
         } catch (Exception e) {
             Log.e(TAG, "Error starting WiFi scan", e);
             unregisterScanReceiver();
             isScanning = false;
             currentScanPromise = null;
-            promise.reject("SCAN_ERROR", e.getMessage());
+            promise.reject("SCAN_ERROR", "Error starting WiFi scan: " + e.getMessage());
         }
     }
 
@@ -142,13 +179,24 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
             }
 
             List<ScanResult> results = wifiManager.getScanResults();
+            Log.d(TAG, "Scan results count: " + (results != null ? results.size() : 0));
+            
             if (results == null) {
                 Log.w(TAG, "Scan results are null");
                 currentScanPromise.reject("SCAN_FAILED", "No scan results available");
+            } else if (results.isEmpty()) {
+                Log.w(TAG, "Scan results are empty - no networks found");
+                currentScanPromise.reject("SCAN_FAILED", "No WiFi networks found. Please check if WiFi is enabled and try again.");
             } else {
-                WritableArray networks = convertScanResultsToArray(results);
-                sendEvent("wifiScanResults", networks);
-                currentScanPromise.resolve(networks);
+                Log.d(TAG, "Found " + results.size() + " networks");
+                
+                // Create separate arrays for event and promise to avoid ObjectAlreadyConsumedException
+                WritableArray networksForEvent = convertScanResultsToArray(results);
+                WritableArray networksForPromise = convertScanResultsToArray(results);
+                
+                Log.d(TAG, "Sending scan results: " + networksForPromise.size() + " networks");
+                sendEvent("wifiScanResults", networksForEvent);
+                currentScanPromise.resolve(networksForPromise);
             }
         } catch (Exception e) {
             Log.e(TAG, "Error handling scan success", e);
@@ -271,6 +319,174 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
         } catch (Exception e) {
             promise.reject("ENABLE_ERROR", e.getMessage());
         }
+    }
+
+    @ReactMethod
+    public void checkPermissions(Promise promise) {
+        try {
+            WritableMap permissionStatus = Arguments.createMap();
+            
+            // Check WiFi permissions
+            boolean hasWifiState = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.ACCESS_WIFI_STATE) == PackageManager.PERMISSION_GRANTED;
+            boolean hasChangeWifiState = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.CHANGE_WIFI_STATE) == PackageManager.PERMISSION_GRANTED;
+            
+            // Check location permissions
+            boolean hasFineLocation = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            boolean hasCoarseLocation = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED;
+            
+            // Check network permissions
+            boolean hasNetworkState = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.ACCESS_NETWORK_STATE) == PackageManager.PERMISSION_GRANTED;
+            boolean hasChangeNetworkState = ActivityCompat.checkSelfPermission(reactContext, 
+                    Manifest.permission.CHANGE_NETWORK_STATE) == PackageManager.PERMISSION_GRANTED;
+            
+            // Check Android 13+ permissions
+            boolean hasNearbyWifiDevices = false;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                hasNearbyWifiDevices = ActivityCompat.checkSelfPermission(reactContext,
+                        Manifest.permission.NEARBY_WIFI_DEVICES) == PackageManager.PERMISSION_GRANTED;
+            }
+            
+            // Check WiFi state
+            boolean isWifiEnabled = wifiManager.isWifiEnabled();
+            
+            permissionStatus.putBoolean("hasWifiState", hasWifiState);
+            permissionStatus.putBoolean("hasChangeWifiState", hasChangeWifiState);
+            permissionStatus.putBoolean("hasFineLocation", hasFineLocation);
+            permissionStatus.putBoolean("hasCoarseLocation", hasCoarseLocation);
+            permissionStatus.putBoolean("hasNetworkState", hasNetworkState);
+            permissionStatus.putBoolean("hasChangeNetworkState", hasChangeNetworkState);
+            permissionStatus.putBoolean("hasNearbyWifiDevices", hasNearbyWifiDevices);
+            permissionStatus.putBoolean("isWifiEnabled", isWifiEnabled);
+            permissionStatus.putBoolean("canScan", checkPermissions());
+            
+            promise.resolve(permissionStatus);
+        } catch (Exception e) {
+            promise.reject("PERMISSION_CHECK_ERROR", e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void requestPermissions(Promise promise) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                // Check what permissions are missing
+                String missingPermissions = getMissingPermissions();
+                
+                if (missingPermissions.isEmpty()) {
+                    // All permissions are already granted
+                    promise.resolve(true);
+                    return;
+                }
+                
+                // Create a list of permissions to request
+                List<String> permissionsToRequest = new ArrayList<>();
+                
+                if (ActivityCompat.checkSelfPermission(reactContext, 
+                        Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
+                }
+                
+                if (ActivityCompat.checkSelfPermission(reactContext, 
+                        Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                    permissionsToRequest.add(Manifest.permission.ACCESS_COARSE_LOCATION);
+                }
+                
+                // For Android 13+ (API 33+), also request NEARBY_WIFI_DEVICES
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    if (ActivityCompat.checkSelfPermission(reactContext,
+                            Manifest.permission.NEARBY_WIFI_DEVICES) != PackageManager.PERMISSION_GRANTED) {
+                        permissionsToRequest.add(Manifest.permission.NEARBY_WIFI_DEVICES);
+                    }
+                }
+                
+                if (!permissionsToRequest.isEmpty()) {
+                    // Request permissions using ActivityCompat
+                    ActivityCompat.requestPermissions(
+                        reactContext.getCurrentActivity(),
+                        permissionsToRequest.toArray(new String[0]),
+                        1001 // Request code
+                    );
+                    
+                    // Note: We can't directly handle the result here due to React Native bridge limitations
+                    // The app should handle the permission result in the main activity
+                    promise.resolve(false); // Indicates permissions were requested
+                } else {
+                    promise.resolve(true); // All permissions already granted
+                }
+            } else {
+                // For older Android versions, no runtime permissions needed
+                promise.resolve(true);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error requesting permissions", e);
+            promise.reject("PERMISSION_REQUEST_ERROR", e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void scanWifiNetworksWithPermissionRequest(Promise promise) {
+        Log.d(TAG, "Starting WiFi scan with permission request...");
+        
+        // Check if WiFi is enabled first
+        if (!wifiManager.isWifiEnabled()) {
+            Log.e(TAG, "WiFi is not enabled");
+            promise.reject("WIFI_DISABLED", "WiFi is not enabled. Please enable WiFi first.");
+            return;
+        }
+
+        // Check permissions and request if needed
+        if (!checkPermissions()) {
+            Log.d(TAG, "Permissions not granted, requesting permissions...");
+            
+            // Request permissions first
+            requestPermissions(new Promise() {
+                @Override
+                public void resolve(Object value) {
+                    // After requesting permissions, try scanning again
+                    Log.d(TAG, "Permission request completed, attempting scan...");
+                    
+                    // Give a small delay for permission dialog to complete
+                    new Handler().postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            // Check permissions again after request
+                            if (checkPermissions()) {
+                                Log.d(TAG, "Permissions granted, proceeding with scan...");
+                                // Call the original scan method
+                                scanWifiNetworks(promise);
+                            } else {
+                                Log.e(TAG, "Permissions still not granted after request");
+                                promise.reject("PERMISSION_DENIED", "Required permissions not granted after request. Please grant location permissions manually.");
+                            }
+                        }
+                    }, 1000); // 1 second delay
+                }
+
+                @Override
+                public void reject(String code, String message) {
+                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
+                }
+
+                @Override
+                public void reject(String code, Throwable throwable) {
+                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + throwable.getMessage());
+                }
+
+                @Override
+                public void reject(String code, String message, Throwable throwable) {
+                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
+                }
+            });
+            return;
+        }
+
+        // If permissions are already granted, proceed with normal scan
+        scanWifiNetworks(promise);
     }
 
     private boolean checkPermissions() {

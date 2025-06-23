@@ -16,6 +16,18 @@ interface WifiInfo {
   networkId: number;
 }
 
+interface PermissionStatus {
+  hasWifiState: boolean;
+  hasChangeWifiState: boolean;
+  hasFineLocation: boolean;
+  hasCoarseLocation: boolean;
+  hasNetworkState: boolean;
+  hasChangeNetworkState: boolean;
+  hasNearbyWifiDevices: boolean;
+  isWifiEnabled: boolean;
+  canScan: boolean;
+}
+
 export const useWifiManager = () => {
   const [networks, setNetworks] = useState<WifiNetwork[]>([]);
   const [currentWifi, setCurrentWifi] = useState<WifiInfo | null>(null);
@@ -35,6 +47,44 @@ export const useWifiManager = () => {
       throw err;
     } finally {
       setLoading(false);
+    }
+  }, []);
+
+  const scanNetworksWithPermissionRequest = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const results = await WifiManager.scanWifiNetworksWithPermissionRequest();
+      setNetworks(results);
+      return results;
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to scan networks';
+      setError(errorMessage);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const requestPermissions = useCallback(async () => {
+    setError(null);
+    try {
+      return await WifiManager.requestPermissions();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to request permissions';
+      setError(errorMessage);
+      throw err;
+    }
+  }, []);
+
+  const checkPermissions = useCallback(async () => {
+    setError(null);
+    try {
+      return await WifiManager.checkPermissions();
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to check permissions';
+      setError(errorMessage);
+      throw err;
     }
   }, []);
 
@@ -121,6 +171,9 @@ export const useWifiManager = () => {
     
     // Actions
     scanNetworks,
+    scanNetworksWithPermissionRequest,
+    requestPermissions,
+    checkPermissions,
     connectToWifi,
     disconnectFromWifi,
     getCurrentWifiInfo,

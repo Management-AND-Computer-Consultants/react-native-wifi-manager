@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2024-01-XX
+
+### Added
+- **Automatic Permission Request**: New `scanWifiNetworksWithPermissionRequest()` method that automatically requests permissions when needed
+- **Permission Request Method**: New `requestPermissions()` method to manually request required permissions
+- **Enhanced Permission Checking**: Improved `checkPermissions()` method with detailed permission status
+- **Permission Status Interface**: New `PermissionStatus` interface for comprehensive permission information
+
+### New Methods
+- `scanWifiNetworksWithPermissionRequest()` - Scan with automatic permission request
+- `requestPermissions()` - Request required permissions manually
+- `checkPermissions()` - Get detailed permission status
+
+### Enhanced Hook
+- Added `scanNetworksWithPermissionRequest()` to useWifiManager hook
+- Added `requestPermissions()` to useWifiManager hook
+- Added `checkPermissions()` to useWifiManager hook
+
+### User Experience
+- **Seamless Permission Flow**: Users no longer need to manually handle permission requests
+- **Better Error Handling**: More descriptive error messages for permission issues
+- **Automatic Retry**: Permission request followed by automatic scan retry
+- **Permission Status**: Detailed information about which permissions are granted/denied
+
+## [1.0.9] - 2024-01-XX
+
+### Fixed
+- **WiFi Scanning Issues**: Improved error handling and debugging for "Failed to Scan" errors
+- **Permission Checking**: Enhanced permission validation with detailed error messages
+- **Timeout Management**: Added 10-second timeout to prevent hanging scans
+- **WiFi State Validation**: Added WiFi enabled check before scanning
+
+### Added
+- **Debug Logging**: Comprehensive logging for troubleshooting scan issues
+- **Permission Check Method**: New `checkPermissions()` method to diagnose permission issues
+- **Better Error Messages**: More descriptive error messages for different failure scenarios
+- **Scan Result Validation**: Check for empty scan results and provide appropriate feedback
+
+### Technical Improvements
+- Added WiFi enabled state check before starting scan
+- Enhanced broadcast receiver error handling
+- Improved scan result processing with empty result detection
+- Added timeout mechanism to prevent infinite waiting
+- Better debugging information in logs
+
+## [1.0.8] - 2024-01-XX
+
+### Fixed
+- **CRITICAL**: Fixed ObjectAlreadyConsumedException in WiFi scanning
+- **Array Consumption**: Created separate WritableArray instances for events and promises
+- **Memory Management**: Prevented React Native bridge array consumption conflicts
+
+### Technical Improvements
+- Fixed race condition where the same WritableArray was used for both event emission and promise resolution
+- Enhanced error handling for array operations
+- Improved stability of WiFi scanning functionality
+
 ## [1.0.7] - 2024-01-XX
 
 ### Fixed

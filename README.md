@@ -101,7 +101,7 @@ Add these capabilities to your Xcode project:
 
 ## Usage
 
-### Basic Usage with Popup Component
+### Basic Usage with Automatic Permission Request (Recommended)
 
 ```tsx
 import React, { useState } from 'react';
@@ -132,7 +132,7 @@ const App = () => {
 };
 ```
 
-### Advanced Usage with Custom Hook
+### Advanced Usage with Permission Management
 
 ```tsx
 import React, { useState, useEffect } from 'react';
@@ -145,7 +145,9 @@ const WifiScreen = () => {
     currentWifi,
     loading,
     error,
-    scanNetworks,
+    scanNetworksWithPermissionRequest, // New method with automatic permission request
+    requestPermissions,                // New method to request permissions manually
+    checkPermissions,                  // New method to check permission status
     connectToWifi,
     disconnectFromWifi,
     getCurrentWifiInfo,
@@ -158,6 +160,49 @@ const WifiScreen = () => {
     // Get current WiFi info on component mount
     getCurrentWifiInfo();
   }, []);
+
+  const handleScanWithPermissions = async () => {
+    try {
+      // This will automatically request permissions if needed
+      await scanNetworksWithPermissionRequest();
+      Alert.alert('Success', 'WiFi scan completed!');
+    } catch (err) {
+      Alert.alert('Error', 'Failed to scan WiFi networks');
+    }
+  };
+
+  const handleCheckPermissions = async () => {
+    try {
+      const permissions = await checkPermissions();
+      console.log('Permission Status:', permissions);
+      
+      if (!permissions.canScan) {
+        Alert.alert(
+          'Permissions Required', 
+          'Location permissions are required for WiFi scanning. Would you like to request them?',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Request', onPress: handleRequestPermissions }
+          ]
+        );
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to check permissions');
+    }
+  };
+
+  const handleRequestPermissions = async () => {
+    try {
+      const granted = await requestPermissions();
+      if (granted) {
+        Alert.alert('Success', 'Permissions granted! You can now scan for WiFi networks.');
+      } else {
+        Alert.alert('Info', 'Permission request sent. Please grant permissions in the dialog.');
+      }
+    } catch (err) {
+      Alert.alert('Error', 'Failed to request permissions');
+    }
+  };
 
   const handleConnect = async () => {
     if (!selectedNetwork || !password) {
@@ -189,8 +234,14 @@ const WifiScreen = () => {
       )}
 
       <Button 
-        title={loading ? "Scanning..." : "Scan Networks"} 
-        onPress={scanNetworks}
+        title="Check Permissions" 
+        onPress={handleCheckPermissions}
+        style={{ marginBottom: 10 }}
+      />
+
+      <Button 
+        title={loading ? "Scanning..." : "Scan Networks (Auto Permissions)"} 
+        onPress={handleScanWithPermissions}
         disabled={loading}
       />
 
@@ -218,38 +269,87 @@ const WifiScreen = () => {
 };
 ```
 
-### Direct API Usage
+### Direct API Usage with Permission Management
 
 ```tsx
 import WifiManager from 'management-and-computer-consultants-react-native-wifi-manager';
 
-// Scan for WiFi networks
-const scanNetworks = async () => {
+// Check permissions first
+const checkPermissions = async () => {
   try {
-    const networks = await WifiManager.scanWifiNetworks();
+    const permissions = await WifiManager.checkPermissions();
+    console.log('Permission Status:', permissions);
+    
+    if (!permissions.canScan) {
+      console.log('Cannot scan - missing permissions or WiFi disabled');
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('Permission check failed:', error);
+    return false;
+  }
+};
+
+// Request permissions if needed
+const requestPermissionsIfNeeded = async () => {
+  try {
+    const granted = await WifiManager.requestPermissions();
+    if (granted) {
+      console.log('Permissions already granted');
+      return true;
+    } else {
+      console.log('Permission request sent');
+      return false;
+    }
+  } catch (error) {
+    console.error('Permission request failed:', error);
+    return false;
+  }
+};
+
+// Scan with automatic permission request (Recommended)
+const scanNetworksWithPermissions = async () => {
+  try {
+    const networks = await WifiManager.scanWifiNetworksWithPermissionRequest();
     console.log('Available networks:', networks);
+    return networks;
   } catch (error) {
     console.error('Scan failed:', error);
+    throw error;
   }
 };
 
-// Connect to a WiFi network
-const connectToNetwork = async (ssid: string, password: string) => {
+// Manual permission flow
+const scanNetworksManual = async () => {
   try {
-    await WifiManager.connectToWifi(ssid, password);
-    console.log('Connected successfully!');
+    // Check permissions first
+    const hasPermissions = await checkPermissions();
+    
+    if (!hasPermissions) {
+      // Request permissions
+      const requested = await requestPermissionsIfNeeded();
+      if (!requested) {
+        throw new Error('Permissions not granted');
+      }
+      
+      // Wait a bit for permission dialog to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Check permissions again
+      const finalCheck = await checkPermissions();
+      if (!finalCheck) {
+        throw new Error('Permissions still not granted after request');
+      }
+    }
+    
+    // Now scan networks
+    const networks = await WifiManager.scanWifiNetworks();
+    console.log('Available networks:', networks);
+    return networks;
   } catch (error) {
-    console.error('Connection failed:', error);
-  }
-};
-
-// Get current WiFi information
-const getCurrentWifi = async () => {
-  try {
-    const info = await WifiManager.getCurrentWifiInfo();
-    console.log('Current WiFi:', info);
-  } catch (error) {
-    console.error('Failed to get WiFi info:', error);
+    console.error('Scan failed:', error);
+    throw error;
   }
 };
 ```

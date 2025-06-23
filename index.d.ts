@@ -14,12 +14,42 @@ declare module 'management-and-computer-consultants-react-native-wifi-manager' {
     networkId: number;
   }
 
+  export interface PermissionStatus {
+    hasWifiState: boolean;
+    hasChangeWifiState: boolean;
+    hasFineLocation: boolean;
+    hasCoarseLocation: boolean;
+    hasNetworkState: boolean;
+    hasChangeNetworkState: boolean;
+    hasNearbyWifiDevices: boolean;
+    isWifiEnabled: boolean;
+    canScan: boolean;
+  }
+
   export interface WifiManagerInterface {
     /**
      * Scan for available WiFi networks
      * @returns Promise<WifiNetwork[]> Array of available networks
      */
     scanWifiNetworks(): Promise<WifiNetwork[]>;
+
+    /**
+     * Scan for available WiFi networks with automatic permission request
+     * @returns Promise<WifiNetwork[]> Array of available networks
+     */
+    scanWifiNetworksWithPermissionRequest(): Promise<WifiNetwork[]>;
+
+    /**
+     * Request required permissions for WiFi scanning
+     * @returns Promise<boolean> True if permissions are granted, false if requested
+     */
+    requestPermissions(): Promise<boolean>;
+
+    /**
+     * Check current permission status
+     * @returns Promise<PermissionStatus> Detailed permission status
+     */
+    checkPermissions(): Promise<PermissionStatus>;
 
     /**
      * Connect to a WiFi network
