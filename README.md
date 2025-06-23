@@ -377,7 +377,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 If you encounter any issues or have questions, please:
 
 1. Check the [troubleshooting section](#troubleshooting)
-2. Search existing [issues](https://github.com/yourusername/management-and-computer-consultants-react-native-wifi-manager/issues)
+2. Search existing [issues](https://github.com/Management-AND-Computer-Consultants/react-native-wifi-manager/issues)
 3. Create a new issue with detailed information about your problem
 
 ## Changelog
