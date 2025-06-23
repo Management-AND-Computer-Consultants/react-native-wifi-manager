@@ -1,10 +1,38 @@
 {
-  "name": "management-and-computer-consultants-react-native-wifi-manager",
+  "name": "@management-and-computer-consultants/react-native-wifi-manager",
   "version": "1.0.0",
   "description": "React Native plugin for WiFi network scanning and connection management",
   "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "src/",
+    "android/",
+    "ios/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./src/WifiManager": {
+      "types": "./src/WifiManager.tsx",
+      "default": "./src/WifiManager.tsx"
+    },
+    "./src/useWifiManager": {
+      "types": "./src/useWifiManager.ts",
+      "default": "./src/useWifiManager.ts"
+    }
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "echo \"No build step required\"",
+    "prepublishOnly": "npm run build",
+    "publish": "node scripts/publish.js"
   },
   "keywords": [
     "react-native",
@@ -12,14 +40,24 @@
     "network",
     "connection",
     "android",
-    "ios"
+    "ios",
+    "wifi-manager",
+    "wifi-scanner",
+    "network-management",
+    "react-native-plugin"
   ],
-  "author": "Your Name",
+  "author": "Management AND Computer Consultants",
   "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0",
+    "npm": ">=6.0.0"
+  },
   "peerDependencies": {
+    "react": ">=16.8.0",
     "react-native": ">=0.60.0"
   },
   "devDependencies": {
+    "react": "^18.0.0",
     "react-native": "^0.72.0"
   },
   "repository": {
