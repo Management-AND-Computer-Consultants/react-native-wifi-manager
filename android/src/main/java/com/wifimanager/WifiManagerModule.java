@@ -486,6 +486,11 @@ public class WifiManagerModule extends ReactContextBaseJavaModule {
                 public void reject(String code, String message, Throwable throwable) {
                     promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message);
                 }
+
+                @Override
+                public void reject(String code, String message, Throwable throwable, WritableMap userInfo) {
+                    promise.reject("PERMISSION_REQUEST_FAILED", "Failed to request permissions: " + message, throwable, userInfo);
+                }
             });
             return;
         }

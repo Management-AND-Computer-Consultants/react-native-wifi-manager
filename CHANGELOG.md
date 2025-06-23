@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2024-12-19
+
+### Fixed
+- Fixed compilation error due to missing `reject(String,String,Throwable,WritableMap)` method in Promise interface implementation
+
 ## [1.1.1] - 2024-01-XX
 
 ### Fixed
@@ -62,17 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added timeout mechanism to prevent infinite waiting
 - Better debugging information in logs
 
-## [1.0.8] - 2024-01-XX
+## [1.0.8] - 2024-12-19
 
 ### Fixed
-- **CRITICAL**: Fixed ObjectAlreadyConsumedException in WiFi scanning
-- **Array Consumption**: Created separate WritableArray instances for events and promises
-- **Memory Management**: Prevented React Native bridge array consumption conflicts
-
-### Technical Improvements
-- Fixed race condition where the same WritableArray was used for both event emission and promise resolution
-- Enhanced error handling for array operations
-- Improved stability of WiFi scanning functionality
+- Fixed compilation error due to missing `reject(String,String,Throwable,WritableMap)` method in Promise interface implementation
 
 ## [1.0.7] - 2024-01-XX
 
